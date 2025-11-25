@@ -36,7 +36,7 @@ return [
     ],
 
     'api' => [
-        'url' => env('API_URL', 'http://localhost:5000/api'),
+        'url' => env('API_URL', env('APP_URL', 'http://localhost') . '/api'),
     ],
 
 ];

@@ -21,12 +21,23 @@ class ApiService
             'Accept' => 'application/json',
         ];
 
-        $token = Session::get('api_token');
-        if ($token) {
-            $headers['Authorization'] = 'Bearer ' . $token;
-        }
-
         return $headers;
+    }
+
+    protected function getHttpClient()
+    {
+        $client = Http::withHeaders($this->getHeaders());
+        
+        // Add session cookie for internal API requests
+        $sessionName = config('session.cookie');
+        $sessionId = Session::getId();
+        if ($sessionId) {
+            $client = $client->withCookies([
+                $sessionName => $sessionId,
+            ], parse_url($this->baseUrl, PHP_URL_HOST) ?? 'localhost');
+        }
+        
+        return $client;
     }
 
     protected function handleResponse($response)
@@ -41,7 +52,7 @@ class ApiService
     // Auth API
     public function register(string $email, string $password, string $name)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->post("{$this->baseUrl}/auth/register", [
                 'email' => $email,
                 'password' => $password,
@@ -60,7 +71,7 @@ class ApiService
 
     public function login(string $email, string $password)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->post("{$this->baseUrl}/auth/login", [
                 'email' => $email,
                 'password' => $password,
@@ -85,7 +96,7 @@ class ApiService
     public function getCurrentUser()
     {
         try {
-            $response = Http::withHeaders($this->getHeaders())
+            $response = $this->getHttpClient()
                 ->get("{$this->baseUrl}/auth/me");
 
             if ($response->successful()) {
@@ -103,7 +114,7 @@ class ApiService
     // Courses API
     public function getCourses()
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->get("{$this->baseUrl}/courses");
 
         return $this->handleResponse($response);
@@ -111,7 +122,7 @@ class ApiService
 
     public function getCourse(string $id)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->get("{$this->baseUrl}/courses/{$id}");
 
         return $this->handleResponse($response);
@@ -120,7 +131,7 @@ class ApiService
     // Cart API
     public function getCart()
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->get("{$this->baseUrl}/cart");
 
         return $this->handleResponse($response);
@@ -128,7 +139,7 @@ class ApiService
 
     public function addToCart(int $courseId)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->post("{$this->baseUrl}/cart/{$courseId}");
 
         return $this->handleResponse($response);
@@ -136,7 +147,7 @@ class ApiService
 
     public function removeFromCart(int $courseId)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->delete("{$this->baseUrl}/cart/{$courseId}");
 
         return $this->handleResponse($response);
@@ -145,10 +156,7 @@ class ApiService
     // Orders API
     public function createOrder(array $data, $paymentProof = null)
     {
-        $headers = $this->getHeaders();
-        unset($headers['Content-Type']); // Let Guzzle set it for multipart
-        
-        $request = Http::withHeaders($headers);
+        $request = $this->getHttpClient();
         
         if ($paymentProof) {
             $request = $request->attach('payment_proof', file_get_contents($paymentProof->getRealPath()), $paymentProof->getClientOriginalName());
@@ -161,7 +169,7 @@ class ApiService
 
     public function getOrders()
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->get("{$this->baseUrl}/orders");
 
         return $this->handleResponse($response);
@@ -170,7 +178,7 @@ class ApiService
     // Enrollments API
     public function getEnrollments()
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->get("{$this->baseUrl}/enrollments");
 
         return $this->handleResponse($response);
@@ -178,7 +186,7 @@ class ApiService
 
     public function getEnrollment(string $courseId)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->get("{$this->baseUrl}/enrollments/{$courseId}");
 
         return $this->handleResponse($response);
@@ -186,7 +194,7 @@ class ApiService
 
     public function updateProgress(string $courseId, int $progress)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->patch("{$this->baseUrl}/enrollments/{$courseId}/progress", [
                 'progress' => $progress,
             ]);
@@ -197,7 +205,7 @@ class ApiService
     // Admin API
     public function getAdminOrders()
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->get("{$this->baseUrl}/admin/orders");
 
         return $this->handleResponse($response);
@@ -205,7 +213,7 @@ class ApiService
 
     public function confirmPayment(int $orderId)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->patch("{$this->baseUrl}/admin/orders/{$orderId}/confirm");
 
         return $this->handleResponse($response);
@@ -213,10 +221,7 @@ class ApiService
 
     public function createCourse(array $data, $thumbnail = null, $previewVideo = null)
     {
-        $headers = $this->getHeaders();
-        unset($headers['Content-Type']); // Let Guzzle set it for multipart
-        
-        $request = Http::withHeaders($headers);
+        $request = $this->getHttpClient();
         
         if ($thumbnail) {
             $request = $request->attach('thumbnail', file_get_contents($thumbnail->getRealPath()), $thumbnail->getClientOriginalName());
@@ -233,10 +238,7 @@ class ApiService
 
     public function updateCourse(int $courseId, array $data, $thumbnail = null, $previewVideo = null)
     {
-        $headers = $this->getHeaders();
-        unset($headers['Content-Type']); // Let Guzzle set it for multipart
-        
-        $request = Http::withHeaders($headers);
+        $request = $this->getHttpClient();
         
         if ($thumbnail) {
             $request = $request->attach('thumbnail', file_get_contents($thumbnail->getRealPath()), $thumbnail->getClientOriginalName());
@@ -253,10 +255,7 @@ class ApiService
 
     public function addVideoToCourse(int $courseId, array $data, $video = null)
     {
-        $headers = $this->getHeaders();
-        unset($headers['Content-Type']); // Let Guzzle set it for multipart
-        
-        $request = Http::withHeaders($headers);
+        $request = $this->getHttpClient();
         
         if ($video) {
             $request = $request->attach('video', file_get_contents($video->getRealPath()), $video->getClientOriginalName());
@@ -269,10 +268,7 @@ class ApiService
 
     public function updateVideo(int $courseId, int $videoId, array $data, $video = null)
     {
-        $headers = $this->getHeaders();
-        unset($headers['Content-Type']); // Let Guzzle set it for multipart
-        
-        $request = Http::withHeaders($headers);
+        $request = $this->getHttpClient();
         
         if ($video) {
             $request = $request->attach('video', file_get_contents($video->getRealPath()), $video->getClientOriginalName());
@@ -285,7 +281,7 @@ class ApiService
 
     public function deleteVideo(int $courseId, int $videoId)
     {
-        $response = Http::withHeaders($this->getHeaders())
+        $response = $this->getHttpClient()
             ->delete("{$this->baseUrl}/admin/courses/{$courseId}/videos/{$videoId}");
 
         return $this->handleResponse($response);

@@ -5,17 +5,10 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use App\Services\ApiService;
+use Illuminate\Support\Facades\Session;
 
 class ApiAuth
 {
-    protected ApiService $apiService;
-
-    public function __construct(ApiService $apiService)
-    {
-        $this->apiService = $apiService;
-    }
-
     /**
      * Handle an incoming request.
      *
@@ -23,16 +16,24 @@ class ApiAuth
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (!session()->has('api_token')) {
-            return redirect()->route('login');
-        }
+        // For API routes, check session token
+        if ($request->expectsJson() || $request->is('api/*')) {
+            if (!Session::has('api_token') || !Session::has('user')) {
+                return response()->json(['error' => 'Unauthorized'], 401);
+            }
+        } else {
+            // For web routes, redirect to login
+            if (!Session::has('api_token')) {
+                return redirect()->route('login');
+            }
 
-        // Verify token is still valid by getting current user
-        $user = $this->apiService->getCurrentUser();
-        if (!$user) {
-            session()->forget('api_token');
-            session()->forget('user');
-            return redirect()->route('login');
+            // Verify user exists
+            $sessionUser = Session::get('user');
+            if (!$sessionUser) {
+                Session::forget('api_token');
+                Session::forget('user');
+                return redirect()->route('login');
+            }
         }
 
         return $next($request);
